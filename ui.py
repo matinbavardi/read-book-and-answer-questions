@@ -354,6 +354,12 @@ class MainWindow(QMainWindow):
         self.answer_box = QTextEdit()
         self.answer_box.setReadOnly(True)
         self.answer_box.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        self.answer_box.document().setDefaultStyleSheet(
+            "h1,h2,h3{margin:4px 0}"
+            "code{background:#f0f0f0;padding:1px 4px;border-radius:3px;font-family:monospace}"
+            "pre{background:#f0f0f0;padding:8px;border-radius:4px;font-family:monospace}"
+            "ul,ol{margin:4px 0;padding-left:20px}"
+        )
         root.addWidget(self.answer_box, stretch=3)
 
         # Logs
@@ -487,6 +493,9 @@ class MainWindow(QMainWindow):
         self._ask_worker.start()
 
     def _on_answer_done(self, answer: str, sources: list):
+        # Re-render streamed plain text as markdown
+        self.answer_box.setMarkdown(answer)
+
         if sources:
             self._log("Sources: " + " | ".join(s["label"] for s in sources))
 

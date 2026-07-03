@@ -1,0 +1,56 @@
+Git & GitHub Workflow
+=====================
+
+Repository: https://github.com/matinbavardi/read-book-and-answer-questions
+Account   : matinbavardi
+
+
+── Daily workflow ────────────────────────────────────────────────────────────
+
+1. Check what changed
+   git status
+
+2. Review the changes line by line
+   git diff
+
+3. Stage the files you want to commit
+   git add file1.py file2.py          # specific files (safer)
+   git add .                           # everything at once
+
+4. Commit with a message
+   git commit -m "short description of what and why"
+
+5. Push to GitHub
+   git push
+
+
+── Useful commands ───────────────────────────────────────────────────────────
+
+See recent commits:
+   git log --oneline
+
+Undo staged file (before commit):
+   git restore --staged file.py
+
+Undo uncommitted change in a file:
+   git restore file.py
+
+See what is already on GitHub:
+   gh repo view --web
+
+
+── First time on a new machine ───────────────────────────────────────────────
+
+git clone https://github.com/matinbavardi/read-book-and-answer-questions.git
+cd read-book-and-answer-questions
+uv sync
+cp .env.example .env      # then fill in your API keys
+
+
+── What is NOT tracked (see .gitignore) ──────────────────────────────────────
+
+  .env              ← API keys — never commit this
+  chroma_db/        ← local vector database (rebuilt by re-indexing)
+  qa_sessions/      ← personal session logs
+  .venv/            ← Python virtual environment
+  __pycache__/      ← compiled bytecode

@@ -554,7 +554,11 @@ class MainWindow(QMainWindow):
 
     def _on_provider_changed(self, provider: str):
         self.cb_model.clear()
-        self.cb_model.addItems(get_models(provider))
+        models = get_models(provider)
+        self.cb_model.addItems(models)
+        if provider == "Ollama (local)":
+            has = bool(models) and not models[0].startswith("(")
+            self._log("Ollama models: " + (", ".join(models) if has else "none installed"))
 
     def _on_clear_history(self):
         self._history.clear()

@@ -2,8 +2,9 @@ import os
 import time
 from typing import Callable
 
+import requests
 from dotenv import load_dotenv
-from openai import OpenAI, RateLimitError
+from openai import OpenAI, NotFoundError, RateLimitError
 
 from vector_store import get_context_and_sources, semantic_search
 from web_search import web_search
@@ -66,7 +67,20 @@ def get_client(provider: str = "OpenRouter") -> OpenAI:
     return _clients[provider]
 
 
+def get_ollama_models() -> list[str]:
+    """Fetch models actually installed in the local Ollama instance."""
+    try:
+        resp = requests.get("http://localhost:11434/api/tags", timeout=2)
+        resp.raise_for_status()
+        return [m["name"] for m in resp.json().get("models", [])]
+    except Exception:
+        return []
+
+
 def get_models(provider: str) -> list[str]:
+    if provider == "Ollama (local)":
+        models = get_ollama_models()
+        return models if models else ["(no models installed — run: ollama pull <name>)"]
     return PROVIDERS.get(provider, {}).get("models", [])
 
 
@@ -103,6 +117,12 @@ def _call_llm(
                     temperature=0.2, max_tokens=1024,
                 )
                 return resp.choices[0].message.content.strip()
+        except NotFoundError:
+            raise RuntimeError(
+                f"Model '{model}' not found.\n"
+                + (f"Run:  ollama pull {model}" if provider == "Ollama (local)" else
+                   "Check the model name in the toolbar.")
+            )
         except RateLimitError:
             if attempt == len(delays):
                 raise

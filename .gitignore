@@ -1,0 +1,25 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables — never commit secrets
+.env
+
+# Local vector database (rebuild by re-indexing)
+chroma_db/
+
+# User session logs (personal data)
+qa_sessions/
+
+# App state
+.picker_state.json
+
+# Claude Code internal files
+.claude/

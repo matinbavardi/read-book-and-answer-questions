@@ -19,4 +19,5 @@ dependencies = [
     "langdetect>=1.0.9",
     "matplotlib>=3.11.0",
     "duckduckgo-search>=6.0.0",
+    "pdfplumber>=0.11.10",
 ]

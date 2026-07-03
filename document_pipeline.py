@@ -5,26 +5,60 @@ from langchain_core.documents import Document
 from langchain_core.runnables import RunnableLambda
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+# Persian/Arabic punctuation added so chunks break at natural sentence boundaries
+_SEPARATORS = ["\n\n", "\n", ".", "!", "?", "؟", "،", "؛", " ", ""]
 
-_LOADERS = {
-    ".pdf": PyPDFLoader,
-    ".docx": Docx2txtLoader,
-    ".doc": Docx2txtLoader,
-    ".txt": TextLoader,
-}
+
+def _load_txt(file_path: Path) -> list[Document]:
+    """Try common encodings so Persian/Arabic Windows files load correctly."""
+    for enc in ("utf-8", "utf-8-sig", "windows-1256", "cp1256", "latin-1"):
+        try:
+            text = file_path.read_text(encoding=enc)
+            return [Document(page_content=text, metadata={"source": str(file_path)})]
+        except (UnicodeDecodeError, ValueError):
+            continue
+    # last resort — replace undecodable bytes
+    text = file_path.read_text(encoding="utf-8", errors="replace")
+    return [Document(page_content=text, metadata={"source": str(file_path)})]
+
+
+def _load_pdf(file_path: Path) -> list[Document]:
+    """Try pdfplumber first (better RTL support), fall back to PyPDFLoader."""
+    try:
+        import pdfplumber
+        docs = []
+        with pdfplumber.open(str(file_path)) as pdf:
+            for i, page in enumerate(pdf.pages):
+                text = page.extract_text() or ""
+                if text.strip():
+                    docs.append(Document(
+                        page_content=text,
+                        metadata={"source": str(file_path), "page": i},
+                    ))
+        if docs:
+            return docs
+    except ImportError:
+        pass
+    # fallback
+    return PyPDFLoader(str(file_path)).load()
+
 
 def load_document(file_path: Path) -> list[Document]:
-    loader_cls = _LOADERS.get(file_path.suffix.lower())
-    if loader_cls is None:
-        raise ValueError(f"Unsupported file type: {file_path.suffix}")
-    return loader_cls(str(file_path)).load()
+    suffix = file_path.suffix.lower()
+    if suffix == ".txt":
+        return _load_txt(file_path)
+    if suffix == ".pdf":
+        return _load_pdf(file_path)
+    if suffix in (".docx", ".doc"):
+        return Docx2txtLoader(str(file_path)).load()
+    raise ValueError(f"Unsupported file type: {suffix}")
 
 
 def make_document_chain(chunk_size: int = 1000, chunk_overlap: int = 150):
-    """Return a LCEL chain: Path -> list[Document] with the given splitter settings."""
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
+        separators=_SEPARATORS,
     )
     return RunnableLambda(load_document) | RunnableLambda(splitter.split_documents)
 

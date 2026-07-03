@@ -30,8 +30,24 @@ _LANG_NAMES: dict[str, str] = {
 def _extract_text(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix == ".txt":
+        for enc in ("utf-8", "utf-8-sig", "windows-1256", "cp1256", "latin-1"):
+            try:
+                return path.read_text(encoding=enc)
+            except (UnicodeDecodeError, ValueError):
+                continue
         return path.read_text(encoding="utf-8", errors="replace")
     if suffix == ".pdf":
+        try:
+            import pdfplumber
+            pages = []
+            with pdfplumber.open(str(path)) as pdf:
+                for page in pdf.pages:
+                    pages.append(page.extract_text() or "")
+            text = "\n".join(pages)
+            if text.strip():
+                return text
+        except ImportError:
+            pass
         from langchain_community.document_loaders import PyPDFLoader
         return "\n".join(d.page_content for d in PyPDFLoader(str(path)).load())
     if suffix in (".doc", ".docx"):

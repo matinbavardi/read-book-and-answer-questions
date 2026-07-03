@@ -1,6 +1,6 @@
 # Document Q&A
 
-A desktop application that lets you select a PDF, Word, or text document, index it into a local vector database, and ask questions about it in natural language. Answers stream in real time, every session is saved automatically, and the full pipeline is built as a composable chain where each step is independently replaceable.
+A desktop application that lets you select a PDF, Word, or text document, index it into a local vector database, and ask questions about it in natural language. Answers stream in real time, render as Markdown when complete, every session is saved automatically, and the full pipeline is built as a composable chain where each step is independently replaceable.
 
 > **This app is a well-structured RAG pipeline with agentic-inspired architecture — composable units, conversation memory, and automatic fallback — where each module is an independent, replaceable step in the chain.**
 
@@ -35,7 +35,8 @@ index_chain.invoke(file_path)
 | **Semantic Search** | `vector_store.py` | query → top-N matching chunks |
 | **Build Context** | `vector_store.py` | chunks → plain text + source list |
 | **LLM (streaming)** | `rag.py` | context + history + question → streamed tokens |
-| **Save & Display** | `session_logger.py` + `ui.py` | answer → screen + `.txt` |
+| **Markdown render** | `ui.py` | raw answer → formatted display |
+| **Save** | `session_logger.py` | answer → `.txt` session file |
 
 If semantic search returns no context, an optional **Web Search fallback** (`web_search.py`) queries DuckDuckGo and answers from web results instead.
 
@@ -69,14 +70,23 @@ Partially. The architecture is agentic-inspired — each module is an autonomous
 - Automatic file statistics on load: size, character count, word count, detected language
 - Auto-recommended chunk size and overlap based on document length
 - Persistent vector store — indexed documents survive app restarts
-- **Double-click** any indexed document in the sidebar to select it without re-indexing
+- **Double-click** any indexed document in the sidebar to select it without re-indexing — stats are computed from the stored chunks
+
+### Persian / Arabic / multilingual support
+- `.txt` files: automatically tries `UTF-8` → `Windows-1256` → `CP1256` → `Latin-1` so files created on Windows load correctly
+- `.pdf` files: uses `pdfplumber` (better RTL font handling) with `PyPDFLoader` as fallback
+- Text splitter includes Persian punctuation (`،` `؟` `؛`) as chunk boundaries
+- The LLM is instructed to **answer in the same language as the question**
+- UI renders RTL text (Persian, Arabic, Hebrew, Urdu) correctly throughout
 
 ### Q&A
 - **Streaming answers** — tokens appear in real time as the LLM generates them
+- **Markdown rendering** — when streaming completes, the answer is re-rendered: headers, bold, code blocks, and lists display properly
 - **Conversation memory** — the LLM remembers the last 3 turns for follow-up questions
 - **Web search fallback** — if no relevant context is found in the document, optionally search DuckDuckGo (toggle with `?` help tip)
 - **Spinning progress indicator** — visible from click until the first token arrives
 - Question history dropdown with fuzzy search across all previous sessions
+- Selecting a new file clears the previous answer automatically
 
 ### LLM providers
 Switch between providers from the toolbar without restarting:
@@ -85,12 +95,14 @@ Switch between providers from the toolbar without restarting:
 |---|---|
 | **OpenRouter** | `gpt-oss-120b:free`, `claude-3-haiku`, `gemini-flash-1.5-8b`, `llama-3.1-8b:free` |
 | **Anthropic** | `claude-sonnet-4-6`, `claude-haiku-4-5` |
-| **Ollama (local)** | `llama3.2`, `mistral`, `qwen2.5`, `phi3` |
+| **Ollama (local)** | dynamically fetched from your local Ollama installation |
 
-Automatic retry with exponential backoff on rate-limit errors (5s → 15s → 30s).
+- Automatic retry with exponential backoff on rate-limit errors (5s → 15s → 30s)
+- Clear error message when a model is not installed: `Model 'x' not found — run: ollama pull x`
 
 ### Session management
 - All Q&A sessions saved automatically to `qa_sessions/<document_name>/<document_name>_<date>.txt`
+- Sessions store plain text (not Markdown) so files stay human-readable
 - Document management sidebar — list all indexed documents, remove or select individual ones
 
 ### UI
@@ -98,7 +110,6 @@ Automatic retry with exponential backoff on rate-limit errors (5s → 15s → 30
 - Animated circular spinner while waiting for a response
 - Logs panel for live status messages
 - Configurable chunk size, overlap, result count, and web fallback — each with a `?` help tooltip
-- Selecting a new file clears the previous answer automatically
 - Full RTL / Persian / Arabic text support (PyQt6 + Noto Naskh Arabic font)
 
 ---
@@ -115,11 +126,12 @@ Automatic retry with exponential backoff on rate-limit errors (5s → 15s → 30
 ├── vector_store.py            # ChromaDB: store, search, list, remove documents
 ├── rag.py                     # PROVIDERS, streaming LLM calls, RAG answer
 ├── web_search.py              # DuckDuckGo fallback search
-├── session_logger.py          # Q&A session writer + HTML export
+├── session_logger.py          # Q&A session writer
 ├── generate_architecture.py   # script to regenerate Architecture.png
 ├── Architecture.png
-├── chroma_db/                 # persistent vector database (auto-created)
-└── qa_sessions/               # saved Q&A logs (auto-created)
+├── GIT_WORKFLOW.txt           # git & GitHub quick reference
+├── chroma_db/                 # persistent vector database (auto-created, not in git)
+└── qa_sessions/               # saved Q&A logs (auto-created, not in git)
     └── <document_name>/
         └── <document_name>_<YYYY-MM-DD_HH-MM-SS>.txt
 ```
@@ -138,7 +150,6 @@ uv sync
 
 ```env
 OPEN_ROUTER_API_KEY=your_key_here
-OPEN_ROUTER_MODEL=openai/gpt-oss-120b:free
 
 # optional — only needed if you select these providers in the UI
 ANTHROPIC_API_KEY=your_key_here
@@ -159,14 +170,9 @@ uv run python main.py
 - Python 3.11+
 - `zenity` for the file picker on Linux — `sudo apt install zenity`
 - `fonts-noto` for Persian/Arabic rendering — `sudo apt install fonts-noto`
-- For **Ollama**: install from [ollama.com](https://ollama.com) and pull a model before selecting it in the UI
-
----
-
-## Multilingual support
-
-The app works with any language:
-
-- The embedding model (`all-MiniLM-L6-v2`) is multilingual — semantic search works across languages
-- The LLM is instructed to **answer in the same language as the question**
-- The UI renders RTL text (Persian, Arabic, Hebrew, Urdu) correctly throughout
+- For **Ollama**: install from [ollama.com](https://ollama.com), then pull a model before using it:
+  ```bash
+  ollama pull aya        # good multilingual model, strong Persian/Arabic support
+  ollama pull llama3.2
+  ollama pull mistral
+  ```
